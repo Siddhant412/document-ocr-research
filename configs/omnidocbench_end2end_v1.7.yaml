@@ -1,0 +1,28 @@
+# English-only baseline, mounted into the official OmniDocBench evaluator
+# container by scripts/run_official_evaluator.sh. Paths below are container paths.
+end2end_eval:
+  metrics:
+    text_block:
+      metric: [Edit_dist, BLEU, METEOR]
+    display_formula:
+      metric: [Edit_dist, CDM]
+      cdm_workers: 2
+    table:
+      metric: [TEDS, Edit_dist]
+      teds_workers: 2
+    reading_order:
+      metric: [Edit_dist]
+  dataset:
+    dataset_name: end2end_dataset
+    ground_truth:
+      data_path: ./gt/OmniDocBench.json
+    prediction:
+      data_path: ./data_md/predictions
+    match_method: quick_match
+    match_workers: 2
+    quick_match_truncated_timeout_sec: 300
+    match_timeout_sec: 420
+    timeout_fallback_max_chunk_span: 10
+    timeout_fallback_order_penalty: 0.10
+    filter:
+      language: english

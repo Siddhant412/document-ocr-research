@@ -1,0 +1,119 @@
+# Immutable inputs for the HunyuanOCR-1.5 / OmniDocBench baseline.
+# Do not edit after a reportable smoke run begins: make a new config instead.
+
+[dataset]
+name = "OmniDocBench"
+release = "v1.7"
+evaluation_scope = "english_only"
+expected_full_evaluation_pages = 755
+evaluator_repository = "https://github.com/opendatalab/OmniDocBench.git"
+evaluator_commit = "193627ae9e97d89188468ed1ee3b7a856ff76044"
+dataset_repository = "https://huggingface.co/datasets/opendatalab/OmniDocBench"
+dataset_revision = "aa1ee96d106dbe53d0ae59474d75c6e6d9b53fec"
+annotations_sha256 = "a45cd84b04ad8b793e775089640e6b681209abea33ead54c1828ddca35fae496"
+images_sha256_manifest = "2e775fddec46dfda75a19cac2e56ba205f0024c2ad000829095bfd6be304f85c"
+evaluator_image = "ghcr.io/zeng-weijun/omnidocbench-eval:repro-ubuntu2204"
+evaluator_image_digest = "sha256:6116ad72172e763b5c43e963d5efebf2093f2362b975f58156ce4f6c9142e617"
+
+[model]
+name = "HunyuanOCR-1.5"
+repository = "https://huggingface.co/tencent/HunyuanOCR"
+huggingface_model = "tencent/HunyuanOCR"
+# Resolved from the model repository main ref on 2026-09-16.
+huggingface_revision = "47644ecc4fc854efa4f505155158831f36773ee4"
+# AR inference never loads the legacy v1.0 files or the DFlash draft model.
+# Excluding them prevents a non-baseline accelerator artifact from being used.
+download_ignore_patterns = ["v1.0/*", "dflash/*"]
+toolkit_repository = "https://github.com/Tencent-Hunyuan/HunyuanOCR.git"
+# Resolved from the official toolkit main ref on 2026-09-16.
+toolkit_commit = "f2d2ec989c3b96dcc46a1f434e1032fd12c459d8"
+architecture = "HunyuanOCR served through official vLLM autoregressive route"
+execution_mode = "vllm_autoregressive_only"
+
+[environment]
+# This is the CUDA-13 vLLM AR route with the compatibility pin verified by a
+# real server startup on the target RTX 4090.  vLLM 0.25.1 must use
+# Transformers 5.5.3 here: 5.13.0 fails Hunyuan's vLLM model inspection.
+# `--enforce-eager` below also bypasses the vLLM CUDA-graph call that omits
+# Hunyuan's required intermediate_tensors argument.
+python = "3.12"
+cuda_family = "13"
+minimum_nvidia_driver_major = 580
+torch_requirement = "torch==2.11.0+cu130"
+vllm_requirement = "vllm==0.25.1"
+transformers_requirement = "transformers==5.5.3"
+# Torch 2.11's cu130 wheel requires CUDA toolkit 13.0.2, but transitive
+# dependencies can otherwise mix a newer nvcc (13.2+) with its 13.0 headers.
+# That combination fails every CUDA extension build before compilation starts.
+# Keep the compiler, CCCL headers, and runtime components on the 13.0 release
+# family used by torch.  The setup script verifies a trivial CUDA compilation
+# with these exact paths before it attempts the expensive FlashAttention build.
+cuda_cccl_requirement = "nvidia-cuda-cccl==13.0.85"
+cuda_crt_requirement = "nvidia-cuda-crt==13.0.88"
+cuda_nvcc_requirement = "nvidia-cuda-nvcc==13.0.88"
+cuda_nvrtc_requirement = "nvidia-cuda-nvrtc==13.0.88"
+cuda_runtime_requirement = "nvidia-cuda-runtime==13.0.96"
+cuda_nvvm_requirement = "nvidia-nvvm==13.0.88"
+# Transformers 5.5.3 requires tokenizers <=0.23.0. vLLM's unconstrained
+# dependency resolution can otherwise select 0.23.2, which makes importing
+# Transformers fail before the server starts.
+tokenizers_requirement = "tokenizers==0.22.2"
+flash_attention_requirement = "flash-attn==2.8.3"
+flashinfer_requirement = "flashinfer-python==0.6.13"
+runai_model_streamer_requirement = "runai-model-streamer==0.16.1"
+openai_requirement = "openai>=1.30.0"
+pillow_requirement = "pillow>=10.0.0"
+model_cache_root = "/workspace/hunyuanocr-1.5-cache"
+toolkit_root = "/workspace/HunyuanOCR-1.5-toolkit"
+# The full CUDA/vLLM environment stays on the Pod's container disk because
+# the existing network volume does not have room for another ~9 GB runtime.
+# The source-built FlashAttention wheel is cached separately on /workspace, so
+# a replacement Pod can recreate the environment without repeating the long
+# compilation.
+environment_root = "/root/venvs/hunyuanocr-1.5"
+
+[server]
+host = "127.0.0.1"
+base_port = 18000
+served_model_name = "tencent/HunyuanOCR"
+gpu_memory_utilization = 0.9
+max_model_len = 131072
+tensor_parallel_size = 1
+max_images_per_prompt = 4
+# Eager execution preserves the pinned AR model, prompt, weights, and decoding
+# configuration while avoiding the known vLLM 0.25.1 CUDA-graph argument bug.
+enforce_eager = true
+# The upstream guide reports about one minute for a healthy first server load.
+# A three-minute limit catches dead-server/API mismatches before GPU time is
+# spent waiting on an impossible readiness loop.
+startup_timeout_seconds = 180
+
+[inference]
+task_type = "doc_parse"
+# Exact official doc_parse instruction, from HunyuanOCR's inference task map.
+prompt = "提取文档图片中正文的所有信息用markdown格式表示，其中页眉、页脚部分忽略，表格用html格式表达，文档中公式用latex格式表示，按照阅读顺序组织进行解析。"
+stream = true
+temperature = 0.0
+top_p = 1.0
+top_k = -1
+repetition_penalty = 1.08
+max_tokens = 8192
+# These are Hunyuan's official streaming-client tail-repetition values.
+tail_repeat_min_start_chars = 4000
+tail_repeat_check_interval_chars = 1000
+tail_repeat_threshold = 8
+cleanup_min_repeats = 10
+
+[smoke]
+pages = 180
+seed = 20260906
+minimum_per_source = 5
+mechanical_preflight_pages = 3
+timing_preflight_pages = 20
+
+[evaluation]
+method = "end2end"
+match_method = "quick_match"
+match_workers = 2
+cdm_workers = 2
+teds_workers = 2

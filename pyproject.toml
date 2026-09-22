@@ -1,0 +1,12 @@
+[project]
+name = "document-ocr-research"
+version = "0.1.0"
+description = "Reproducible OCR and VLM baselines for OmniDocBench"
+requires-python = ">=3.11"
+dependencies = ["scipy>=1.11,<2"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
